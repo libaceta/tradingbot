@@ -12,7 +12,9 @@ RUN npm run build:prod
 FROM nginx:1.27-alpine
 
 COPY --from=builder /app/dist/trading-dashboard/browser /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copiamos como template para que envsubst reemplace $BOT_URL al arrancar
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+# envsubst reemplaza $BOT_URL en el template antes de iniciar nginx
+CMD ["/bin/sh", "-c", "envsubst '$BOT_URL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
