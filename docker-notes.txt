@@ -1,0 +1,26 @@
+# Desarrollo local (usa override automáticamente, expone 5432)
+docker compose up -d
+
+# Railway / Producción (solo el compose principal, sin override)
+docker compose -f docker-compose.yml up -d
+
+
+
+
+Pasos para subir a railway
+https://railway.com/project/7dbef9d9-c156-4f97-95eb-e60d7be93a81
+
+# 1. Instalar CLI
+npm install -g @railway/cli
+
+# 2. Login
+railway login
+
+# 3. Crear proyecto
+railway init
+
+# 4. Deploy
+railway up
+
+# 5. Configurar variables en Railway Dashboard
+# Settings → Variables → agregar todas las del .env

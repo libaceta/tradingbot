@@ -1,0 +1,198 @@
+@use '@angular/material' as mat;
+
+// Dark trading theme
+$trading-theme: mat.define-theme((
+  color: (
+    theme-type: dark,
+    primary: mat.$cyan-palette,
+  ),
+  density: (scale: 0),
+));
+
+html {
+  @include mat.all-component-themes($trading-theme);
+}
+
+// Global styles
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  background-color: #0d1117;
+  color: #e6edf3;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+}
+
+// Color palette for trading
+:root {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --bg-card: #1c2128;
+  --border-color: #30363d;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --color-profit: #26a641;
+  --color-loss: #f85149;
+  --color-neutral: #58a6ff;
+  --color-warning: #d29922;
+  --color-long: #26a641;
+  --color-short: #f85149;
+  --sidebar-width: 220px;
+  --header-height: 60px;
+}
+
+// Scrollbar
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+// Card styles
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+
+  h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+}
+
+// Profit/Loss colors
+.profit { color: var(--color-profit) !important; }
+.loss { color: var(--color-loss) !important; }
+.neutral { color: var(--color-neutral) !important; }
+
+// Badges
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+
+  &.badge-long { background: rgba(38, 166, 65, 0.15); color: var(--color-long); }
+  &.badge-short { background: rgba(248, 81, 73, 0.15); color: var(--color-short); }
+  &.badge-open { background: rgba(88, 166, 255, 0.15); color: var(--color-neutral); }
+  &.badge-closed { background: rgba(110, 118, 129, 0.15); color: var(--text-muted); }
+  &.badge-live { background: rgba(38, 166, 65, 0.15); color: var(--color-profit); }
+  &.badge-paused { background: rgba(210, 153, 34, 0.15); color: var(--color-warning); }
+}
+
+// Table overrides
+.mat-mdc-table {
+  background: var(--bg-card) !important;
+
+  .mat-mdc-header-row {
+    background: var(--bg-tertiary) !important;
+  }
+
+  .mat-mdc-row {
+    &:hover { background: rgba(88, 166, 255, 0.05) !important; }
+    &:last-child td { border-bottom: none; }
+  }
+
+  .mat-mdc-header-cell, .mat-mdc-cell {
+    color: var(--text-primary);
+    border-bottom-color: var(--border-color) !important;
+    font-size: 13px;
+  }
+
+  .mat-mdc-header-cell {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+}
+
+// Page layout
+.page-container {
+  padding: 20px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+// Grid layouts
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+
+  @media (max-width: 1200px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.full-width-card {
+  margin-bottom: 16px;
+}
+
+// Form controls
+.filter-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 16px;
+
+  mat-form-field {
+    min-width: 150px;
+  }
+}
+
+// Spinner overlay
+.loading-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--text-secondary);
+  gap: 12px;
+}
+
+// Mat form field dark override
+.mat-mdc-form-field {
+  .mat-mdc-text-field-wrapper {
+    background: var(--bg-tertiary) !important;
+  }
+}
