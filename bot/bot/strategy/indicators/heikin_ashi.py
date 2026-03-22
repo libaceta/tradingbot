@@ -57,10 +57,12 @@ def ha_is_bullish(ha: pd.DataFrame) -> pd.Series:
 def ha_color_change_to_bull(ha: pd.DataFrame) -> pd.Series:
     """True on the first bullish HA candle after a bearish one."""
     bull = ha_is_bullish(ha)
-    return bull & ~bull.shift(1).fillna(True)
+    prev_bull = bull.shift(1).astype("boolean").fillna(True).astype(bool)
+    return bull & ~prev_bull
 
 
 def ha_color_change_to_bear(ha: pd.DataFrame) -> pd.Series:
     """True on the first bearish HA candle after a bullish one."""
     bear = ~ha_is_bullish(ha)
-    return bear & ~bear.shift(1).fillna(True)
+    prev_bear = bear.shift(1).astype("boolean").fillna(True).astype(bool)
+    return bear & ~prev_bear
