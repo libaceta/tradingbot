@@ -20,10 +20,88 @@ from bot.config.settings import settings
 from bot.data.feed import KlineFeed
 from bot.db.engine import get_session
 from bot.db.repositories import portfolio_repo, signal_repo, trade_repo
+from bot.exchange.bybit_client import get_http_client
 from bot.risk.position_sizer import calculate_position_size
 from bot.utils.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
+
+
+async def reconcile_open_trades(symbol: str, candle_time: datetime) -> None:
+    """
+    Detect trades that were auto-closed by Bybit (SL/TP hit) but not yet recorded in DB.
+    If DB has an OPEN trade but Bybit has no active position → close the trade in DB
+    using the actual exit price from Bybit's closed PnL history.
+    """
+    async with get_session() as session:
+        open_trade = await trade_repo.get_open_trade(session, symbol)
+        if not open_trade:
+            return  # No open trade in DB, nothing to reconcile
+
+    # DB has an open trade — check if Bybit still has the position
+    bybit_position = state.position_manager.get_position(symbol)
+    if bybit_position:
+        return  # Position still active in Bybit, no reconciliation needed
+
+    # DB has open trade but Bybit has NO position → auto-closed by SL/TP
+    logger.info("reconcile_detected_sl_tp_hit", symbol=symbol, trade_id=open_trade.id)
+
+    # Fetch actual exit price from Bybit closed PnL
+    exit_price = 0.0
+    exit_reason = "SL_TP_HIT"
+    try:
+        closed_pnl_list = await asyncio.to_thread(
+            get_http_client().get_closed_pnl, symbol, 5
+        )
+        if closed_pnl_list:
+            latest = closed_pnl_list[0]
+            exit_price = float(latest.get("avgExitPrice") or latest.get("exitPrice") or 0)
+            # Determine reason from closed position data
+            exec_type = latest.get("execType", "")
+            if exec_type == "BustTrade":
+                exit_reason = "LIQUIDATION"
+            elif open_trade.stop_loss and exit_price:
+                if open_trade.direction == "LONG" and exit_price <= (open_trade.stop_loss * 1.001):
+                    exit_reason = "STOP_LOSS"
+                elif open_trade.direction == "SHORT" and exit_price >= (open_trade.stop_loss * 0.999):
+                    exit_reason = "STOP_LOSS"
+                elif open_trade.take_profit and open_trade.direction == "LONG" and exit_price >= (open_trade.take_profit * 0.999):
+                    exit_reason = "TAKE_PROFIT"
+                elif open_trade.take_profit and open_trade.direction == "SHORT" and exit_price <= (open_trade.take_profit * 1.001):
+                    exit_reason = "TAKE_PROFIT"
+                else:
+                    exit_reason = "SL_TP_HIT"
+    except Exception as e:
+        logger.error("reconcile_closed_pnl_error", error=str(e))
+
+    if exit_price <= 0:
+        # Fallback: use candle close price if we couldn't get actual exit
+        logger.warning("reconcile_using_candle_close_as_exit", symbol=symbol)
+        return  # Wait for next candle with better data
+
+    async with get_session() as session:
+        open_trade = await trade_repo.get_open_trade(session, symbol)
+        if open_trade:
+            exit_fee = (exit_price * open_trade.quantity * settings.backtest_commission
+                        if open_trade.quantity else None)
+            await trade_repo.close_trade(
+                session,
+                open_trade,
+                exit_price=exit_price,
+                exit_time=candle_time,
+                exit_reason=exit_reason,
+                exit_fee=exit_fee,
+            )
+            logger.info(
+                "reconcile_trade_closed",
+                symbol=symbol,
+                trade_id=open_trade.id,
+                exit_price=exit_price,
+                exit_reason=exit_reason,
+            )
+
+    from bot.api.event_bus import bus
+    await bus.publish("trade_close", {"symbol": symbol, "reason": exit_reason})
 
 
 async def on_candle(candle: dict, df) -> None:
@@ -39,6 +117,9 @@ async def on_candle(candle: dict, df) -> None:
     await state.position_manager.refresh()
     equity = state.position_manager.equity
     state.guard.update_positions(state.position_manager.open_count())
+
+    # Reconcile: detect trades auto-closed by Bybit (SL/TP) not yet in DB
+    await reconcile_open_trades(symbol, candle_time)
 
     # Evaluate strategy
     signal = state.strategy.evaluate(df)

@@ -142,6 +142,21 @@ class BybitHTTPClient:
             raise RuntimeError(f"Bybit set_trading_stop error: {resp.get('retMsg')}")
         return resp["result"]
 
+    def get_closed_pnl(self, symbol: str, limit: int = 5) -> List[Dict]:
+        """Fetch recently closed positions from Bybit (useful to detect SL/TP hits)."""
+        try:
+            resp = self._session.get_closed_pnl(
+                category="linear",
+                symbol=symbol,
+                limit=limit,
+            )
+            if resp.get("retCode") != 0:
+                raise RuntimeError(f"Bybit closed_pnl error: {resp.get('retMsg')}")
+            return resp["result"]["list"]
+        except Exception as e:
+            logger.error("get_closed_pnl_error", error=str(e))
+            return []
+
     def get_instrument_info(self, symbol: str) -> Dict:
         resp = self._session.get_instruments_info(category="linear", symbol=symbol)
         if resp.get("retCode") != 0:
