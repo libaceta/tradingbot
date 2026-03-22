@@ -53,7 +53,7 @@ import { WebsocketService } from '../../core/services/websocket.service';
           format="percent" [decimals]="2" [colorize]="true" />
         <app-metric-card label="Total PnL" [value]="metrics()?.total_pnl ?? null"
           format="currency" [colorize]="true" />
-        <app-metric-card label="Total Trades" [value]="metrics()?.total_trades ?? null"
+        <app-metric-card label="Total Trades" [value]="metrics()?.total_trades ?? 0"
           format="raw" [subtitle]="tradesSubtitle()" />
         <app-metric-card label="Total Fees" [value]="metrics()?.total_fees_usdt ?? null"
           format="currency" />
@@ -212,7 +212,10 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   tradesSubtitle = computed(() => {
     const m = this.metrics();
     if (!m) return '';
-    return `${m.winning_trades}W / ${m.losing_trades}L`;
+    const w = m.winning_trades ?? 0;
+    const l = m.losing_trades ?? 0;
+    if (w === 0 && l === 0) return '';
+    return `${w}W / ${l}L`;
   });
 
   private equityChart: IChartApi | null = null;

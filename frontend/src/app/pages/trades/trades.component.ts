@@ -267,7 +267,7 @@ export class TradesComponent implements OnInit {
   selectedTrade = signal<Trade | null>(null);
   currentPage = 1;
 
-  filter: TradeFilter = { status: 'CLOSED', page_size: 50 };
+  filter: TradeFilter = { status: '', page_size: 50 };
 
   constructor(private tradeService: TradeService) {}
 
@@ -285,7 +285,7 @@ export class TradesComponent implements OnInit {
   }
 
   clearFilters(): void {
-    this.filter = { status: 'CLOSED', page_size: 50 };
+    this.filter = { status: '', page_size: 50 };
     this.search();
   }
 
