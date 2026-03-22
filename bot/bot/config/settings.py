@@ -20,11 +20,16 @@ class Settings(BaseSettings):
     trading_mode: str = "testnet"  # testnet | live | paused
 
     # ---- Strategy ----
+    strategy_name: str = "momentum_trend"  # momentum_trend | heikin_ashi_scalp
     trade_symbol: str = "BTCUSDT"
     trade_interval: int = 60  # minutes
 
     ema_fast: int = 21
     ema_slow: int = 55
+
+    # Heikin Ashi Scalp strategy params
+    ha_ema_period: int = 21
+    ha_atr_min_pct: float = 0.003  # skip candles with ATR < 0.3% of price
 
     supertrend_period: int = 10
     supertrend_multiplier: float = 3.0
