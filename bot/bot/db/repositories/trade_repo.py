@@ -102,6 +102,19 @@ async def get_open_trade(
     return result.scalar_one_or_none()
 
 
+async def get_all_open_trades(
+    session: AsyncSession, symbol: str
+) -> List[Trade]:
+    """Return ALL open live trades for a symbol (used for reconciliation)."""
+    stmt = (
+        select(Trade)
+        .where(Trade.symbol == symbol, Trade.status == "OPEN", Trade.is_backtest == False)
+        .order_by(Trade.created_at.asc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def get_trades(
     session: AsyncSession,
     symbol: Optional[str] = None,
