@@ -18,5 +18,9 @@ COPY . .
 # Create reports dir
 RUN mkdir -p backtest_reports
 
-# Default command: run the bot + API
-CMD ["python", "-m", "bot.main"]
+# Startup script (runs migrations then starts bot)
+COPY scripts/start.sh /start.sh
+RUN chmod +x /start.sh
+
+# Default command: migrate + run bot
+CMD ["/start.sh"]
