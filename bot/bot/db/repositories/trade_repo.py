@@ -65,21 +65,28 @@ async def close_trade(
     trade.status = "CLOSED"
 
     if trade.entry_price and trade.quantity:
-        if trade.direction == "LONG":
-            gross_pnl = (exit_price - trade.entry_price) * trade.quantity
-        else:
-            gross_pnl = (trade.entry_price - exit_price) * trade.quantity
+        # Cast Decimal → float to avoid TypeError with PostgreSQL Numeric columns
+        ep = float(trade.entry_price)
+        qty = float(trade.quantity)
+        entry_fee_val = float(trade.entry_fee) if trade.entry_fee else 0.0
 
-        total_fees = (trade.entry_fee or 0) + (exit_fee or 0)
+        if trade.direction == "LONG":
+            gross_pnl = (exit_price - ep) * qty
+        else:
+            gross_pnl = (ep - exit_price) * qty
+
+        total_fees = entry_fee_val + (exit_fee or 0.0)
         net_pnl = gross_pnl - total_fees
         trade.gross_pnl = gross_pnl
         trade.net_pnl = net_pnl
 
-        if trade.notional_usdt and trade.notional_usdt > 0:
-            trade.pnl_pct = net_pnl / trade.notional_usdt * 100
+        notional = float(trade.notional_usdt) if trade.notional_usdt else 0.0
+        if notional > 0:
+            trade.pnl_pct = net_pnl / notional * 100
 
-        if trade.risk_usdt and trade.risk_usdt > 0:
-            trade.r_multiple = net_pnl / trade.risk_usdt
+        risk = float(trade.risk_usdt) if trade.risk_usdt else 0.0
+        if risk > 0:
+            trade.r_multiple = net_pnl / risk
 
         if trade.entry_time:
             trade.duration_secs = int((exit_time - trade.entry_time).total_seconds())

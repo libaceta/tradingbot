@@ -71,22 +71,27 @@ async def reconcile_open_trades(symbol: str, candle_time: datetime, candle_close
     async with get_session() as session:
         open_trades = await trade_repo.get_all_open_trades(session, symbol)
         for trade in open_trades:
+            # Cast Decimal → float to avoid TypeError with PostgreSQL Numeric columns
+            sl = float(trade.stop_loss) if trade.stop_loss else None
+            tp = float(trade.take_profit) if trade.take_profit else None
+            qty = float(trade.quantity) if trade.quantity else 0.0
+
             # Determine exit reason based on SL/TP levels
             reason = exit_reason
-            if exit_reason != "RECONCILED" and trade.stop_loss:
+            if exit_reason != "RECONCILED" and sl:
                 if trade.direction == "LONG":
-                    if exit_price <= trade.stop_loss * 1.002:
+                    if exit_price <= sl * 1.002:
                         reason = "STOP_LOSS"
-                    elif trade.take_profit and exit_price >= trade.take_profit * 0.998:
+                    elif tp and exit_price >= tp * 0.998:
                         reason = "TAKE_PROFIT"
                 else:
-                    if exit_price >= trade.stop_loss * 0.998:
+                    if exit_price >= sl * 0.998:
                         reason = "STOP_LOSS"
-                    elif trade.take_profit and exit_price <= trade.take_profit * 1.002:
+                    elif tp and exit_price <= tp * 1.002:
                         reason = "TAKE_PROFIT"
 
-            exit_fee = (exit_price * trade.quantity * settings.backtest_commission
-                        if trade.quantity else None)
+            exit_fee = (exit_price * qty * float(settings.backtest_commission)
+                        if qty else None)
             await trade_repo.close_trade(
                 session,
                 trade,
@@ -326,17 +331,18 @@ async def scheduled_reconcile() -> None:
         if bybit_position:
             return
         # Orphan trades detected — get last known price from Bybit
+        last_price = 0.0
         try:
             klines = await asyncio.to_thread(
                 get_http_client().get_klines, symbol, str(settings.trade_interval), limit=1
             )
             last_price = float(klines[-1]["close"]) if klines else 0.0
         except Exception:
-            last_price = 0.0
-        if last_price > 0:
-            now = datetime.now(timezone.utc)
-            await reconcile_open_trades(symbol, now, last_price)
-            logger.info("scheduled_reconcile_ran", symbol=symbol, price=last_price)
+            pass
+        # Always run reconcile — closed PnL from Bybit will provide the real exit price
+        now = datetime.now(timezone.utc)
+        await reconcile_open_trades(symbol, now, last_price)
+        logger.info("scheduled_reconcile_ran", symbol=symbol, price=last_price)
     except Exception as e:
         logger.error("scheduled_reconcile_error", error=str(e))
 
