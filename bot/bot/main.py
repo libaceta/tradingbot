@@ -322,6 +322,35 @@ async def take_portfolio_snapshot() -> None:
     )
 
 
+async def scheduled_reconcile() -> None:
+    """Scheduled reconciliation: closes orphan DB trades every 5 minutes."""
+    symbol = settings.trade_symbol
+    try:
+        await state.position_manager.refresh()
+        # Use 0.0 as price hint — reconcile will fetch from Bybit or use last known price
+        async with get_session() as session:
+            open_trades = await trade_repo.get_all_open_trades(session, symbol)
+        if not open_trades:
+            return
+        bybit_position = state.position_manager.get_position(symbol)
+        if bybit_position:
+            return
+        # Orphan trades detected — get last known price from Bybit
+        try:
+            klines = await asyncio.to_thread(
+                get_http_client().get_klines, symbol, str(settings.trade_interval), limit=1
+            )
+            last_price = float(klines[-1]["close"]) if klines else 0.0
+        except Exception:
+            last_price = 0.0
+        if last_price > 0:
+            now = datetime.now(timezone.utc)
+            await reconcile_open_trades(symbol, now, last_price)
+            logger.info("scheduled_reconcile_ran", symbol=symbol, price=last_price)
+    except Exception as e:
+        logger.error("scheduled_reconcile_error", error=str(e))
+
+
 async def run_bot() -> None:
     logger.info("bot_starting", mode=settings.trading_mode, symbol=settings.trade_symbol)
 
@@ -345,9 +374,29 @@ async def run_bot() -> None:
         seconds=settings.snapshot_interval_secs,
         id="portfolio_snapshot",
     )
+    scheduler.add_job(
+        scheduled_reconcile,
+        "interval",
+        seconds=300,  # every 5 minutes
+        id="trade_reconcile",
+    )
     scheduler.start()
 
-    await feed.start()
+    # WebSocket with auto-reconnect
+    RECONNECT_DELAY = 15  # seconds between reconnect attempts
+    while True:
+        try:
+            logger.info("ws_connecting", symbol=settings.trade_symbol)
+            await feed.start()
+            logger.warning("ws_disconnected_will_retry", delay=RECONNECT_DELAY)
+        except Exception as e:
+            logger.error("ws_error_will_retry", error=str(e), delay=RECONNECT_DELAY)
+        await asyncio.sleep(RECONNECT_DELAY)
+        # Re-initialize feed buffer before reconnecting
+        try:
+            await feed.initialize()
+        except Exception as e:
+            logger.error("feed_reinit_error", error=str(e))
 
 
 def get_bot_status() -> dict:

@@ -60,10 +60,13 @@ class KlineFeed:
         )
 
     async def start(self) -> None:
-        """Start WebSocket subscription."""
+        """Start WebSocket subscription (runs until WS disconnects)."""
         if not self._initialized:
             await self.initialize()
 
+        # Re-create WS client on each reconnect to get a clean connection
+        from bot.exchange.bybit_client import BybitWebSocketClient
+        self._ws = BybitWebSocketClient()
         self._ws.subscribe_kline(self._on_closed_candle)
         loop = asyncio.get_running_loop()
         await asyncio.to_thread(
