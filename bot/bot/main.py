@@ -139,42 +139,31 @@ async def on_candle(candle: dict, df) -> None:
     existing = state.position_manager.get_position(symbol)
     if existing:
         side = existing["side"]
-        if side == "Buy":  # LONG position
+        if side == "Buy":
             should_exit, reason = state.strategy.should_exit_long(df, existing)
-            if should_exit:
-                logger.info("exit_signal", symbol=symbol, reason=reason)
-                await asyncio.to_thread(
-                    state.order_manager.close_position,
-                    symbol=symbol,
-                    qty=existing["size"],
-                    side="Sell",
-                )
-                await state.position_manager.refresh()
-                async with get_session() as session:
-                    open_trade = await trade_repo.get_open_trade(session, symbol)
-                    if open_trade:
-                        await trade_repo.close_trade(
-                            session,
-                            open_trade,
-                            exit_price=float(candle["close"]),
-                            exit_time=candle_time,
-                            exit_reason=reason,
-                        )
-                from bot.api.event_bus import bus
-                await bus.publish("trade_close", {"symbol": symbol, "reason": reason})
-            return
-
-        elif side == "Sell":  # SHORT position
+        elif side == "Sell":
             should_exit, reason = state.strategy.should_exit_short(df, existing)
-            if should_exit:
-                logger.info("exit_signal", symbol=symbol, reason=reason)
+        else:
+            should_exit, reason = False, ""
+
+        if should_exit:
+            logger.info("exit_signal", symbol=symbol, reason=reason)
+            close_side = "Sell" if side == "Buy" else "Buy"
+            try:
                 await asyncio.to_thread(
                     state.order_manager.close_position,
                     symbol=symbol,
                     qty=existing["size"],
-                    side="Buy",
+                    side=close_side,
                 )
-                await state.position_manager.refresh()
+                logger.info("position_closed_on_exchange", symbol=symbol)
+            except Exception as e:
+                # Position may have already been closed by SL/TP — log and continue
+                logger.warning("close_position_failed", symbol=symbol, error=str(e))
+
+            # Always refresh and close DB trade if position is gone
+            await state.position_manager.refresh()
+            if not state.position_manager.get_position(symbol):
                 async with get_session() as session:
                     open_trade = await trade_repo.get_open_trade(session, symbol)
                     if open_trade:
@@ -187,7 +176,8 @@ async def on_candle(candle: dict, df) -> None:
                         )
                 from bot.api.event_bus import bus
                 await bus.publish("trade_close", {"symbol": symbol, "reason": reason})
-            return
+                logger.info("db_trade_closed", symbol=symbol, reason=reason)
+        return
 
     # No existing position — check for entry signal
     if signal.direction == "NONE":
@@ -382,21 +372,9 @@ async def run_bot() -> None:
     )
     scheduler.start()
 
-    # WebSocket with auto-reconnect
-    RECONNECT_DELAY = 15  # seconds between reconnect attempts
-    while True:
-        try:
-            logger.info("ws_connecting", symbol=settings.trade_symbol)
-            await feed.start()
-            logger.warning("ws_disconnected_will_retry", delay=RECONNECT_DELAY)
-        except Exception as e:
-            logger.error("ws_error_will_retry", error=str(e), delay=RECONNECT_DELAY)
-        await asyncio.sleep(RECONNECT_DELAY)
-        # Re-initialize feed buffer before reconnecting
-        try:
-            await feed.initialize()
-        except Exception as e:
-            logger.error("feed_reinit_error", error=str(e))
+    # Start WebSocket — pybit runs it in a background daemon thread (no loop needed)
+    logger.info("ws_connecting", symbol=settings.trade_symbol)
+    await feed.start()
 
 
 def get_bot_status() -> dict:
