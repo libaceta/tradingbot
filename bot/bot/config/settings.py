@@ -29,7 +29,9 @@ class Settings(BaseSettings):
 
     # Heikin Ashi Scalp strategy params
     ha_ema_period: int = 21
-    ha_atr_min_pct: float = 0.003  # skip candles with ATR < 0.3% of price
+    ha_ema_trend_period: int = 200   # EMA macro trend filter (only trade with trend)
+    ha_atr_min_pct: float = 0.003    # skip candles with ATR < 0.3% of price
+    ha_cooldown_candles: int = 2     # candles to wait after any exit before re-entry
 
     supertrend_period: int = 10
     supertrend_multiplier: float = 3.0
@@ -44,8 +46,8 @@ class Settings(BaseSettings):
     macd_slow: int = 26
     macd_signal_period: int = 9
 
-    atr_sl_multiplier: float = 2.0
-    atr_tp_multiplier: float = 3.0
+    atr_sl_multiplier: float = 1.0   # 1×ATR SL — más ajustado para scalping
+    atr_tp_multiplier: float = 2.0   # 2×ATR TP — ratio R:R 1:2
     risk_per_trade: float = 0.02
 
     # ---- Risk Guards ----

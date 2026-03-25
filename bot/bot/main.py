@@ -108,6 +108,8 @@ async def reconcile_open_trades(symbol: str, candle_time: datetime, candle_close
                 reason=reason,
             )
             await bus.publish("trade_close", {"symbol": symbol, "reason": reason})
+            # Activate cooldown after reconciled close
+            state.strategy.record_exit(candle_time)
 
 
 async def on_candle(candle: dict, df) -> None:
@@ -182,6 +184,8 @@ async def on_candle(candle: dict, df) -> None:
                 from bot.api.event_bus import bus
                 await bus.publish("trade_close", {"symbol": symbol, "reason": reason})
                 logger.info("db_trade_closed", symbol=symbol, reason=reason)
+                # Activate cooldown — prevents immediate re-entry after exit
+                state.strategy.record_exit(candle_time)
         return
 
     # No existing position — check for entry signal
